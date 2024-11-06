@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: wordpress
+  template:
+    metadata:
+      labels:
+        app: wordpress
+    spec:
+      containers:
+      - name: wordpress
+        image: wordpress:latest
+        ports:
+        - containerPort: 80
+        env:
+        - name: WORDPRESS_DB_HOST
+          value: "mysql-service"          # Nombre del servicio de MySQL
+        - name: WORDPRESS_DB_NAME
+          value: "wordpress"              # Nombre de la base de datos en MySQL
+        - name: WORDPRESS_DB_USER
+          value: "user"                   # Usuario de la base de datos
+        - name: WORDPRESS_DB_PASSWORD
+          value: "1234"                   # Contraseña del usuario
+        volumeMounts:
+        - name: wordpress-storage
+          mountPath: /var/www/html
+      volumes:
+      - name: wordpress-storage
+        persistentVolumeClaim:
+          claimName: drupal-nfs-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress-service
+spec:
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: wordpress
