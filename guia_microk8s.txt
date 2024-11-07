@@ -1,0 +1,254 @@
+___________________________ DELETE NODES_______________
+sudo microk8s kubectl delete deployment moodle
+sudo microk8s kubectl delete service moodle-service
+sudo microk8s kubectl delete ingress moodle-ingress
+
+___________________________ APPLY NODES _______________
+microk8s kubectl apply -f moodle-deployment.yaml
+microk8s kubectl apply -f moodle-service.yaml
+microk8s kubectl apply -f moodle-ingress.yaml
+
+___________________________ DESCRIBE NODES____________
+microk8s kubectl describe pod moodle-77fdc6bf7b-pk7fw
+microk8s kubectl get nodes -o wide
+microk8s kubectl logs moodle-77fdc6bf7b-pk7fw
+
+
+_______________
+sudo apt update && sudo apt upgrade -y
+instalar microk8s: sudo snap install microk8s --classic
+administrar permisos:
+sudo usermod -a -G microk8s ubuntu
+sudo chown -f -R ubuntu ~/.kube
+habilitar servicios necesarios: sudo microk8s enable dns storage ingress metrics-server -> eso probablemente sacará error de conexión, ejecutamos: sudo microk8s status --wait-ready y esperamos, si sale que se está ejecutando todos los servicios, se puede seguir
+sudo snap refresh microk8s -> Refrescar microk8s (por alguna razón eso sirve para cuando salen errores)
+instalar los servicios que hayan faltado:
+	sudo microk8s enable ingress && sudo microk8s enable metrics-server
+
+Agregar nodos:
+En el nodo principal (cluster 1) ejecutar:
+	sudo microk8s add-node -> Eso saca un comando que hay que copiar:
+En los nodos aledaños, copiar el comando que se entregó:
+ sudo microk8s join 172.31.38.211:25000/79aaa1c550e5d26b090739dd7189b161 --worker
+Copiar los 2 ultimos pasos para el siguiente nodo, ya que cuando se asigna 1, el siguiente no da tal cual
+
+Verificar que los 3 nodos (incluyendo el principal) están listados:
+sudo microk8s kubectl get nodes
+
+Habilitar alta disponibilidad entre los nodos del cluster, esto sirve para que cualquier nodo pueda asumir el rol del master en cuyo caso este falle, ejecutar en el master
+sudo microk8s enable ha-cluster
+
+Habilitar helm para instalar mysql con bitnami
+sudo microk8s enable helm3
+
+CONFIGURAR MARIADB CON BITNAMI (HELM) (horrible): en el nodo principal
+alias kubectl='microk8s kubectl' -> configurar alias
+sudo snap install helm --classic -> instalar helm
+sudo mkdir -p ~/.kube -> crear carpeta kube (necesaria para kubernetes con kubectl)
+sudo chown -R ubuntu:ubuntu ~/.kube -> asignar permisos
+microk8s kubectl config view --raw > ~/.kube/config -> copiar configuración de microk8s al config
+helm repo update
+helm repo remove bitnami -> (por si está instalado)
+helm repo add bitnami https://charts.bitnami.com/bitnami -> helm repo list (verificar que si esté bitnami)
+helm install mydb bitnami/mariadb --set architecture=replication
+
+REVISAR QUE TODO ESTÉ YENDO BIEN:
+sudo microk8s kubectl get all --all-namespaces
+
+CONFIGURAR EL NFS: EN EL NODO PRINCIPAL
+sudo apt update
+# RPC BIND ANTES DE KERNEL-SERVER:
+sudo apt install -y rpcbind
+sudo systemctl start rpcbind
+sudo systemctl enable rpcbind
+
+sudo apt install -y nfs-kernel-server
+sudo mkdir -p /srv/nfs/kubedata -> directorio para compartir con otros nodos
+sudo chown nobody:nogroup /srv/nfs/kubedata -> permisos de nadie para que los nodos lo puedan leer
+
+echo "/srv/nfs/kubedata *(rw,sync,no_subtree_check,no_root_squash)" | sudo tee -a /etc/exports -> archivo de exportaciones para que el directorio esté disponible para el cluster
+sudo exportfs -a
+sudo systemctl restart nfs-kernel-server -> reiniciar el server
+
+VERIFICACIONES:
+sudo journalctl -xe | grep nfs
+sudo systemctl status nfs-kernel-server
+showmount -e localhost -> salida: /srv/nfs/kubedata * 
+
+# CONFIGURAR NFS CON DOCKER
+--- Desinstalar nfs-kernel-server para instalarlo dentro de un contenedor de docker:
+-- sudo apt remove --purge -y nfs-kernel-server rpcbind
+-- sudo apt autoremove -y
+sudo apt update
+sudo apt install -y docker.io
+sudo systemctl enable --now docker
+Correr el contenedor: sudo docker run -d   --name nfs-server   --privileged   -v /srv/nfs/kubedata:/nfsshare   -e SHARED_DIRECTORY=/nfsshare   -p 2049:2049   -p 111:111  itsthenetwork/nfs-server-alpine
+Explicación de los parámetros:
+--name nfs-server: Asigna el nombre nfs-server al contenedor.
+--privileged: Permite que el contenedor acceda a configuraciones de red que necesita NFS.
+-v /srv/nfs/kubedata:/nfsshare: Monta el directorio en el host (/srv/nfs/kubedata) en el contenedor como /nfsshare.
+-e SHARED_DIRECTORY=/data: Configura el contenedor para compartir /data.
+-p 2049:2049 y -p 111:111: Expone los puertos 2049 y 111 para NFS y rpcbind.
+- itsthenetwork/nfs-server-alpine: imagen de docker para el nfs con todo incluído
+
+## PRUEBA DE CONFIGURACION NFS DESDE OTRO NODO
+instalar nfs-common: sudo apt install -y nfs-common
+Crear una carpeta con permisos adecuados: sudo mkdir -p /mnt/nfs-test
+montar la carpeta para compartirla con el otro volumen: sudo mount -v -o vers=4,loud 172.31.38.211:/ /mnt/nfs-test
+
+-------
+CREAR PV,PVC PARA EL MOODLE
+Crear archivo moodle-pv.yaml con la info:
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    path: /nfsshare #Carpeta compartida que se creó en el docker
+    server: 172.31.38.211
+  persistentVolumeReclaimPolicy: Retain
+
+Crear archivo moodle-pvc.yaml con la info:
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: moodle-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+
+Aplicar cambios:
+sudo microk8s kubectl apply -f moodle-nfs-pv.yaml
+sudo microk8s kubectl apply -f moodle-nfs-pvc.yaml
+
+CREAR ARCHIVO MOODLE-DEPLOYMENT.YAML
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: moodle
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: moodle
+  template:
+    metadata:
+      labels:
+        app: moodle
+    spec:
+      containers:
+      - name: moodle
+        image: bitnami/moodle:latest
+        env:
+        - name: MOODLE_DATABASE_HOST
+          value: "mydb-mariadb-primary.default.svc.cluster.local"  # Nombre del servicio de mariadb que ya está montado
+        - name: MOODLE_DATABASE_PORT_NUMBER
+          value: "3306"
+        - name: MOODLE_DATABASE_NAME
+          value: "moodle"
+        - name: MOODLE_DATABASE_USER
+          value: "moodleuser"
+        - name: MOODLE_DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: moodle-db-secret
+              key: password
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - mountPath: /bitnami/moodle
+          name: moodle-storage
+      volumes:
+      - name: moodle-storage
+        persistentVolumeClaim:
+          claimName: moodle-pvc
+
+crear secreto para la conexion a la base de datos:
+sudo microk8s kubectl create secret generic moodle-db-secret --from-literal=password='juanjose2'
+
+Crear archivo certmanager para conexiones https
+microk8s kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.7.1/cert-manager.yaml
+
+CONECTAR DOMINIO EN GODADDY CON KUBERNETES PARA GENERAR EL CERTIFICADO:
+KEY: h1ULu7Jvvp9J_HtB4uyAZEy5UQDMmibepJA
+VALUE: 8SpMzCkk93T2zuVfb54aij
+crear archivo godaddy-dns.sh:
+#!/bin/bash
+GODADDY_API_KEY="h1ULu7Jvvp9J_HtB4uyAZEy5UQDMmibepJA"
+GODADDY_API_SECRET="8SpMzCkk93T2zuVfb54aij"
+DOMAIN="reto2telematicakubernetes.online" # sin www o subdominios
+RECORD="_acme-challenge" # Let's Encrypt crea un subdominio para la validación
+
+# Crear registro TXT
+add_txt_record() {
+  local value="$1"
+  curl -X PUT "https://api.godaddy.com/v1/domains/$DOMAIN/records/TXT/$RECORD" \
+    -H "Authorization: sso-key $GODADDY_API_KEY:$GODADDY_API_SECRET" \
+    -H "Content-Type: application/json" \
+    -d "[{\"data\": \"$value\", \"ttl\": 600}]"
+}
+
+# Eliminar registro TXT
+delete_txt_record() {
+  curl -X DELETE "https://api.godaddy.com/v1/domains/$DOMAIN/records/TXT/$RECORD" \
+    -H "Authorization: sso-key $GODADDY_API_KEY:$GODADDY_API_SECRET"
+}
+
+# Ejecutar funciones
+case "$1" in
+  "add")
+    add_txt_record "$2"
+    ;;
+  "delete")
+    delete_txt_record
+    ;;
+  *)
+    echo "Uso: $0 {add|delete} <value>"
+    exit 1
+    ;;
+esac
+crear secret para esa api y valor:
+kubectl create secret generic godaddy-api-secret \
+  --from-literal=api-key=TU_API_KEY \
+  --from-literal=api-secret=TU_API_SECRET
+
+
+
+
+
+
+VERIFICACIONES PART 2:
+
+sudo systemctl disable nfs-kernel-server
+sudo systemctl enable nfs-kernel-server
+sudo systemctl start nfs-kernel-server
+sudo systemctl status nfs-kernel-server
+showmount -e -> debería mostrar que se está montando una lista de exportacion
+
+
+
+
+
+
+
+
+
+
+RESUMEN:
+sudo apt update && sudo apt upgrade -y
+sudo snap install microk8s --classic
+sudo usermod -a -G microk8s ubuntu
+sudo chown -f -R ubuntu ~/.kube
+sudo microk8s enable dns storage ingress metrics-server
+sudo snap refresh microk8s
+sudo microk8s enable ingress
+sudo microk8s enable metrics-server
+sudo microk8s status --wait-ready
