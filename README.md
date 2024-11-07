@@ -29,8 +29,6 @@ En este proyecto, desplegamos la aplicación WordPress en un clúster de alta di
 
 - El certificado SSL no se generó correctamente, y el ingreso a la aplicación a través de HTTPS no se completó exitosamente.
 - El intento de balanceo mediante HAProxy no permite la conexión externa al balanceador.
-- Algunos enlaces en la aplicación WordPress no funcionan debido a configuraciones no persistentes en el ConfigMap.
-
 ---
 
 ## 2. Información general de diseño de alto nivel, arquitectura, patrones, mejores prácticas utilizadas
@@ -146,17 +144,17 @@ En este proyecto, desplegamos la aplicación WordPress en un clúster de alta di
 
 ---
 
-## 5. Descripción de archivos de configuración del ambiente (ubicados en `wordpress-deployment`)
+## 5. Descripción de archivos de configuración del ambiente (ubicados en `/home/ubuntu`)
 
-1. `000-default.conf` - Configuración de Apache para WordPress.
-2. `apache2.conf` - Archivo de configuración para Apache2.
+1. `000-default.conf` - Configuración de Apache para Drupal (intentos pasados).
+2. `apache2.conf` - Archivo de configuración para Apache2 (drupal).
 3. `cluster-issuer.yaml` - Emisor de certificados Let's Encrypt para Cert-Manager.
 4. `drupal-nfs-pv-pvc.yaml` - Configuración de PV y PVC para NFS en Drupal (no utilizado finalmente).
 5. `haproxy.cfg` - Configuración de HAProxy (intentado como balanceador de carga manual).
 6. `ingress.yaml` - Configuración de Ingress para WordPress.
 7. `mysql-service.yaml` - Servicio de MySQL.
 8. `wordpress-service.yaml` - Servicio de WordPress.
-9. `wordpress.yaml` - Despliegue de WordPress con intento de uso de ConfigMap.
+9. `wordpress.yaml` - Despliegue de WordPress con intento de uso de ConfigMap (también había un archivo wp-config.php
 
 ---
 
@@ -206,7 +204,7 @@ En este proyecto, desplegamos la aplicación WordPress en un clúster de alta di
   ![primeros errores db de drupal que hicieron que nos cambiáramos a mysql](https://github.com/user-attachments/assets/f7802963-6eaa-4027-a34e-a2282bd8a7c3)  
 - **Modificación de archivos WordPress mediante ConfigMap:** Intentamos usar un ConfigMap para ajustar configuraciones específicas de WordPress, pero esto resultó en problemas de usabilidad, por lo que revertimos el cambio.  
   ![image](https://github.com/user-attachments/assets/df3fc4e0-ce1e-4e23-b1d8-47ffe84399e8)
-
+- **Links que no servían**: Después de haber intentado hacer el despliegue con el balanceador haproxy manualmente, el wordpress seguía funcionando pero ninguna redirección servía, al final lo que pasaba era que había archivos corruptos en el nfs /var/nfs/general, por lo que se optó por desmontar los despliegues que habían, borrar todo lo del interior de esa carpeta, y volver a montar todo y ya funcionó
 ---
 
 ## 8. Video:
