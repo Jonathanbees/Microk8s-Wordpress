@@ -166,9 +166,7 @@ En este proyecto, desplegamos la aplicación WordPress en un clúster de alta di
 
 - **Certificado SSL:** No se generó correctamente el certificado para HTTPS, por lo que la conexión segura no fue posible.
 - **Problema con Ingress:** El Ingress no se configuró correctamente, impidiendo el acceso adecuado a la aplicación a través del dominio.
-- **HAProxy como
-
- balanceador:** Intentamos configurar HAProxy como balanceador manual, pero no se logró acceso externo y el balanceo no fue efectivo.
+- **HAProxy como balanceador:** Intentamos configurar HAProxy como balanceador manual, pero no se logró acceso externo y el balanceo no fue efectivo.
 - **Migración de Moodle a Drupal y luego a WordPress:** Intentamos configurar Moodle como en el Reto 2, pero surgieron problemas, por lo que pasamos a Drupal; sin embargo, la imagen estaba incompleta, así que finalmente optamos por WordPress.
 - **Base de datos:** Inicialmente configuramos MariaDB, pero nos encontramos con problemas y decidimos cambiar a MySQL.
 
