@@ -1,3 +1,5 @@
+### [Versión Actualizada del README]
+
 # Despliegue de WordPress utilizando MicroK8s en IaaS EC2 (Proyecto 2)
 
 ## Estudiante(s): 
@@ -21,19 +23,20 @@ En este proyecto, desplegamos la aplicación WordPress en un clúster de alta di
 - Implementación de un sistema de almacenamiento compartido utilizando NFS, cumpliendo con los requisitos de almacenamiento externo.
 - Despliegue de MySQL en el clúster como base de datos externa para WordPress, garantizando el acceso a datos de manera distribuida.
 - Configuración del dominio personalizado para WordPress, reutilizando el dominio del Reto 2: `reto2telematicakubernetes.online`.
-- Configuración adecuada de estilos para WordPress, logrando que el sitio se vea visualmente completo.
+- Configuración adecuada de estilos para WordPress, logrando que el sitio se vea visualmente completo, aunque algunos enlaces todavía no funcionan.
 
 ### 1.2. Aspectos NO cumplidos:
 
 - El certificado SSL no se generó correctamente, y el ingreso a la aplicación a través de HTTPS no se completó exitosamente.
 - El intento de balanceo mediante HAProxy no permite la conexión externa al balanceador.
+- Algunos enlaces en la aplicación WordPress no funcionan debido a configuraciones no persistentes en el ConfigMap.
 
 ---
 
 ## 2. Información general de diseño de alto nivel, arquitectura, patrones, mejores prácticas utilizadas
 
 - **Arquitectura distribuida:** Configuración de un clúster de alta disponibilidad con MicroK8s, distribuyendo la aplicación WordPress entre múltiples nodos de EC2 para asegurar la disponibilidad y el escalamiento.
-- **Balanceador de carga mediante servicio de Kubernetes:** Configuración de un servicio en los pods de WordPress para balancear las solicitudes de los usuarios de manera equitativa. También se intentó implementar HAProxy como balanceador de carga manual, aunque no se logró acceso externo.
+- **Balanceador de carga mediante servicio de Kubernetes:** Configuración de un servicio en los pods de WordPress para balancear las solicitudes de los usuarios de manera equitativa. También se intentó implementar HAProxy como balanceador de carga manual, aunque no se logró acceso externo y el balanceo no fue efectivo.
 - **Sistema de almacenamiento compartido con NFS:** Despliegue de un servidor NFS para almacenamiento compartido entre los nodos, asegurando la persistencia de datos.
 - **Intento de configuración HTTPS con dominio personalizado:** Configuración de un dominio personalizado con intención de asegurar la conexión HTTPS mediante un certificado SSL (aunque este último no se generó correctamente).
 - **Escalabilidad y monitoreo:** Configuración del clúster para permitir la adición de nodos de manera manual para satisfacer picos de demanda.
@@ -149,16 +152,42 @@ En este proyecto, desplegamos la aplicación WordPress en un clúster de alta di
 2. `apache2.conf` - Archivo de configuración para Apache2.
 3. `cluster-issuer.yaml` - Emisor de certificados Let's Encrypt para Cert-Manager.
 4. `drupal-nfs-pv-pvc.yaml` - Configuración de PV y PVC para NFS en Drupal (no utilizado finalmente).
-5. `ingress.yaml` - Configuración de Ingress para WordPress.
-6. `mysql-service.yaml` - Servicio de MySQL.
-7. `wordpress-service.yaml` - Servicio de WordPress.
-8. `wordpress.yaml` - Despliegue de WordPress.
+5. `haproxy.cfg` - Configuración de HAProxy (intentado como balanceador de carga manual).
+6. `ingress.yaml` - Configuración de Ingress para WordPress.
+7. `mysql-service.yaml` - Servicio de MySQL.
+8. `wordpress-service.yaml` - Servicio de WordPress.
+9. `wordpress.yaml` - Despliegue de WordPress con intento de uso de ConfigMap.
 
 ---
 
 ## 6. Fotos de la ejecución del sistema:
+  
+- **Instancias EC2 y balanceador**  
+  ![nuestras instancias ec2 e intento de balanceador de cargas](https://github.com/user-attachments/assets/082dc381-5b1e-4405-811d-8dafd74ed62f)
 
-[Incluye aquí las fotos de ejecución del sistema, al igual que en el README del Reto 2]
+- **Archivos en la instancia:**  
+  ![archivos en el root, los que se trajeron al repo](https://github.com/user-attachments/assets/c451de09-8a2c-4598-8b6b-bc427fdd4719)
+
+- **Configuración de NFS y servicios ingress**  
+  ![lo que hay en el nfs y pods de las cosas del ingress](https://github.com/user-attachments/assets/5f13f556-1c21-4c21-9d03-9673bc1fead8)
+
+- **Todos nuestros servicios**  
+  ![nuestros servicios](https://github.com/user-attachments/assets/b813a094-f3b8-49ac-9570-f78381c95f27)
+
+- **Pods (réplicas)**  
+  ![todos nuestros pods](https://github.com/user-attachments/assets/7bf46174-8900-44ec-9436-e733b483f505)
+
+- **Instalación de WordPress**  
+  ![instalación de wordpress](https://github.com/user-attachments/assets/64537c77-4c57-46ae-8ea2-c7ec05c67595)
+
+- **WordPress sin imágenes por culpa del wifi de la U**
+  ![wordpress funcionando](https://github.com/user-attachments/assets/7cf2c58d-305f-4d55-89dc-7094bc7b997b)
+
+- **WordPress en funcionamiento**  
+  ![nuestro wordpress pero con imágenes, el internet de la u no deja que se carguen todas bien](https://github.com/user-attachments/assets/e6df1c5e-e0c2-4741-8c94-d11d93acab7d)
+
+- **Dashboard de WordPress (Admin):**  
+  ![wp-admin](https://github.com/user-attachments/assets/6d34f1a6-87f3-4c0c-8d51-10137c539c7c)
 
 ---
 
@@ -166,9 +195,17 @@ En este proyecto, desplegamos la aplicación WordPress en un clúster de alta di
 
 - **Certificado SSL:** No se generó correctamente el certificado para HTTPS, por lo que la conexión segura no fue posible.
 - **Problema con Ingress:** El Ingress no se configuró correctamente, impidiendo el acceso adecuado a la aplicación a través del dominio.
-- **HAProxy como balanceador:** Intentamos configurar HAProxy como balanceador manual, pero no se logró acceso externo y el balanceo no fue efectivo.
-- **Migración de Moodle a Drupal y luego a WordPress:** Intentamos configurar Moodle como en el Reto 2, pero surgieron problemas, por lo que pasamos a Drupal; sin embargo, la imagen estaba incompleta, así que finalmente optamos por WordPress.
-- **Base de datos:** Inicialmente configuramos MariaDB, pero nos encontramos con problemas y decidimos cambiar a MySQL.
+- **HAProxy como balanceador:** Intentamos configurar HAProxy como balanceador manual. La conexión entre balanceador y servicio de pods de wordpress funcionó, pero no se logró acceso externo y el balanceo no fue efectivo.
+  Pantalla de stats que demuestra el funcionamiento del balanceador (que realmente no balanceaba nada, sólo se conectaba a un servicio que en sí mismo ya balanceaba)
+  ![muestra de funcionamiento del balanceador haproxy, página stats](https://github.com/user-attachments/assets/99739a25-627c-4476-a160-96bef16f8d2d)  
+- **Migración de Moodle a Drupal y luego a WordPress:** Intentamos configurar Moodle como en el Reto 2, pero surgieron problemas, por lo que pasamos a Drupal; sin embargo, la imagen estaba incompleta, así que finalmente optamos por WordPress.  
+  Archivos que deberían de existir y no existían en la instalación en ninguna ruta:  
+  ![archivos faltantes de la instalación drupal](https://github.com/user-attachments/assets/04a6ad74-004a-403c-bcff-3e90530374bc)  
+- **Base de datos:** Inicialmente configuramos MariaDB, pero nos encontramos con problemas y decidimos cambiar a MySQL.  
+  Error de base de datos en Drupal que hizo que cambiáramos a MySQL:
+  ![primeros errores db de drupal que hicieron que nos cambiáramos a mysql](https://github.com/user-attachments/assets/f7802963-6eaa-4027-a34e-a2282bd8a7c3)  
+- **Modificación de archivos WordPress mediante ConfigMap:** Intentamos usar un ConfigMap para ajustar configuraciones específicas de WordPress, pero esto resultó en problemas de usabilidad, por lo que revertimos el cambio.  
+  ![image](https://github.com/user-attachments/assets/df3fc4e0-ce1e-4e23-b1d8-47ffe84399e8)
 
 ---
 
